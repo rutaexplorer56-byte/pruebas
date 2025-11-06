@@ -7,23 +7,23 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Crear transporte SMTP
+// Crear transporte SMTP de MailerSend
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: process.env.SMTP_PORT,
-  secure: true, // true para 465, false para otros puertos
+  host: process.env.SMTP_HOST || "smtp.mailersend.net",
+  port: process.env.SMTP_PORT || 587, // 587 (TLS recomendado)
+  secure: false, // false para 587, true solo para 465
   auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
+    user: process.env.EMAIL_USER, // tu usuario SMTP de MailerSend
+    pass: process.env.EMAIL_PASS, // tu contraseña SMTP
   },
 });
 
-// Verificar conexión
+// Verificar conexión SMTP
 transporter.verify((error, success) => {
   if (error) {
-    console.error('Error en la configuración SMTP:', error);
+    console.error('❌ Error en la configuración SMTP:', error);
   } else {
-    console.log('Servidor SMTP listo para enviar correos');
+    console.log('✅ Servidor SMTP listo para enviar correos');
   }
 });
 
@@ -33,20 +33,20 @@ app.post('/enviar-correo', async (req, res) => {
 
   try {
     const info = await transporter.sendMail({
-      from: `"Ruta Explorer" <${process.env.EMAIL_USER}>`,
+      from: `"Ruta Explorer" <${process.env.MAIL_FROM || process.env.EMAIL_USER}>`,
       to,
       subject,
       text: text || '',
       html: html || '',
     });
 
+    console.log("📤 Correo enviado:", info.messageId);
     res.json({ ok: true, messageId: info.messageId });
   } catch (error) {
-    console.error('Error al enviar correo:', error);
+    console.error('❌ Error al enviar correo:', error);
     res.status(500).json({ ok: false, error: 'No se pudo enviar el correo' });
   }
 });
 
-app.listen(process.env.PORT, () => {
-  console.log(`Servidor de correo escuchando en puerto ${process.env.PORT}`);
-});
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`🚀 Servidor de correo escuchando en puerto ${PORT}`));
