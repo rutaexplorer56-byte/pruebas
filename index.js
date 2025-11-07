@@ -1,81 +1,74 @@
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+import { MailerSend, EmailParams, Sender, Recipient } from "mailersend";
 
-
-
-
-// index.js
-const express = require('express');
-const cors = require('cors');
-const axios = require('axios');
-require('dotenv').config();
-
+dotenv.config();
 const app = express();
-app.use(cors({ origin: '*', credentials: true }));
+app.use(cors({ origin: "*", credentials: true }));
 app.use(express.json());
 
-// ====== Envío por API MailerSend ======
-async function sendEmailAPI({ to, subject, html, text }) {
-  const payload = {
-    from: {
-      email: process.env.MAIL_FROM,
-      name: process.env.MAIL_FROM_NAME || 'RutaExplorer'
-    },
-    to: (Array.isArray(to) ? to : [to]).map(e => ({ email: e })),
-    subject,
-    html: html || '',
-    text: text || ''
-  };
+const mailerSend = new MailerSend({
+  apiKey: process.env.MAILERSEND_API_KEY,
+});
 
-  const { data } = await axios.post(
-    'https://api.mailersend.com/v1/email',
-    payload,
-    { headers: { Authorization: `Bearer ${process.env.MAILERSEND_API_KEY}` } }
-  );
-  return data;
-}
-
-// Healthcheck
-app.get('/health', (_req, res) => res.status(200).json({ ok: true }));
-
-// Endpoint genérico
-app.post('/enviar-correo', async (req, res) => {
+// 🔹 Ruta de prueba con HTML directo
+app.post("/enviar-correo", async (req, res) => {
   try {
     const { to, subject, html, text } = req.body;
-    await sendEmailAPI({ to, subject, html, text });
-    return res.json({ ok: true, via: 'api' });
-  } catch (e) {
-    console.error('❌ MailerSend API error:', e.response?.data || e.message);
-    return res.status(500).json({ ok: false, error: e.response?.data || e.message });
+
+    const sentFrom = new Sender(process.env.MAIL_FROM, process.env.MAIL_FROM_NAME || "RutaExplorer");
+    const recipients = [new Recipient(to)];
+
+    const emailParams = new EmailParams()
+      .setFrom(sentFrom)
+      .setTo(recipients)
+      .setSubject(subject)
+      .setHtml(html || "")
+      .setText(text || "");
+
+    await mailerSend.email.send(emailParams);
+
+    res.json({ ok: true, via: "api-sdk" });
+  } catch (error) {
+    console.error("❌ Error al enviar correo:", error.response?.body || error.message);
+    res.status(500).json({ ok: false, error: error.message });
   }
 });
 
-// (Opcional) endpoint con plantilla de MailerSend
-app.post('/enviar-correo-template', async (req, res) => {
+// 🔹 Ruta de prueba usando una plantilla MailerSend
+app.post("/enviar-correo-template", async (req, res) => {
   try {
     const { to, templateId, variables } = req.body;
-    const payload = {
-      from: { email: process.env.MAIL_FROM, name: process.env.MAIL_FROM_NAME || 'RutaExplorer' },
-      to: (Array.isArray(to) ? to : [to]).map(e => ({ email: e })),
-      template_id: templateId,
-      personalization: [{
-        email: Array.isArray(to) ? to[0] : to,
-        data: variables || {}
-      }]
-    };
-    await axios.post('https://api.mailersend.com/v1/email', payload, {
-      headers: { Authorization: `Bearer ${process.env.MAILERSEND_API_KEY}` }
-    });
-    return res.json({ ok: true, via: 'api-template' });
-  } catch (e) {
-    console.error('❌ MailerSend API (template) error:', e.response?.data || e.message);
-    return res.status(500).json({ ok: false, error: e.response?.data || e.message });
+
+    const sentFrom = new Sender(process.env.MAIL_FROM, process.env.MAIL_FROM_NAME || "RutaExplorer");
+    const recipients = [new Recipient(to)];
+
+    const emailParams = new EmailParams()
+      .setFrom(sentFrom)
+      .setTo(recipients)
+      .setTemplateId(templateId)
+      .setPersonalization([
+        {
+          email: to,
+          data: variables || {},
+        },
+      ]);
+
+    await mailerSend.email.send(emailParams);
+
+    res.json({ ok: true, via: "template" });
+  } catch (error) {
+    console.error("❌ Error al enviar correo (template):", error.response?.body || error.message);
+    res.status(500).json({ ok: false, error: error.message });
   }
 });
+
+// Health check
+app.get("/health", (_req, res) => res.json({ ok: true }));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Servidor de correo escuchando en puerto ${PORT}`));
-
-
-
 
 
 
